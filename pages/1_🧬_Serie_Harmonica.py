@@ -3,7 +3,8 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import altair as alt
-import time
+import streamlit.components.v1 as components # Importante para a animação lisa
+import json
 
 st.set_page_config(page_title="Série Harmônica Viva", page_icon="🎻", layout="wide")
 
@@ -25,24 +26,8 @@ st.markdown("""
         border-left: 5px solid #4CAF50;
         margin-top: 20px;
     }
-    .math-block {
-        background-color: #111;
-        padding: 15px;
-        border-radius: 5px;
-        font-family: 'Courier New', monospace;
-        color: #4CAF50;
-        border: 1px solid #333;
-        font-size: 1.1em;
-    }
-    div[data-testid="stRadio"] > div {
-        display: flex;
-        justify-content: center;
-        gap: 20px;
-        background-color: #1f2937;
-        padding: 10px;
-        border-radius: 10px;
-        margin-bottom: 20px;
-    }
+    /* Esconde o botão de fullscreen do iframe para ficar mais limpo */
+    iframe { width: 100%; border: none; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -52,9 +37,6 @@ st.title("🎻 Série Harmônica: A Física da Música")
 if 'amplitudes' not in st.session_state:
     st.session_state.amplitudes = [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 
-if 'animating' not in st.session_state:
-    st.session_state.animating = False
-
 # --- NAVEGAÇÃO ---
 menu = st.radio(
     "Navegação",
@@ -63,13 +45,7 @@ menu = st.radio(
     label_visibility="collapsed"
 )
 
-if menu != "🎻 Corda Viva (Visualizador)":
-    st.session_state.animating = False
-
 # --- FUNÇÕES ---
-def toggle_animation():
-    st.session_state.animating = not st.session_state.animating
-
 def apply_preset(name):
     new_vals = []
     if name == "Flauta": new_vals = [1.0, 0.1, 0.05, 0.0, 0.0, 0.0]
@@ -79,7 +55,9 @@ def apply_preset(name):
     
     for i, val in enumerate(new_vals):
         st.session_state.amplitudes[i] = val
-        st.session_state[f"sl_{i}"] = val 
+        # Atualiza os sliders se existirem na sessão
+        if f"sl_{i}" in st.session_state:
+            st.session_state[f"sl_{i}"] = val
 
 # =========================================
 # CONTEÚDO 1: TEORIA
@@ -115,16 +93,13 @@ if menu == "📚 Aula Teórica":
     col_text, col_chart = st.columns([1, 1.5])
     
     with col_text:
-        # 1. Abre a caixa (HTML) e põe o Título
         st.markdown("""
         <div class="theory-card">
             <h4>📐 A Regra de Ouro</h4>
         """, unsafe_allow_html=True)
-
-        # 2. Insere o LaTeX nativo (Bonito e Limpo)
+        
         st.latex(r"f_n = n \cdot f_1")
-
-        # 3. Continua o texto (HTML) e fecha a caixa
+        
         st.markdown("""
             <p style="margin-top: 10px;">Se a nota fundamental é <b>Lá (110 Hz)</b>:</p>
             <ul>
@@ -141,20 +116,31 @@ if menu == "📚 Aula Teórica":
         st.markdown("#### 🎹 O 'DNA' do Som")
         dados_harmonicos = []
         nomes_notas = ["Tônica (1x)", "Oitava (2x)", "Quinta (3x)", "Oitava (4x)", "Terça Maior (5x)", "Quinta (6x)", "7ª Menor (7x)", "Oitava (8x)"]
+        
         for i in range(1, 9):
             cor = "#3498db"
             if i in [4, 5, 6]: cor = "#4CAF50"
             if i == 7: cor = "#e74c3c"
-            dados_harmonicos.append({"Harmônico": f"H{i}", "Energia": 1/i, "Cor": cor, "Nota": nomes_notas[i-1], "Frequência": f"{i}x"})
+            
+            dados_harmonicos.append({
+                "Harmônico": f"H{i}", 
+                "Energia": 1/i, 
+                "Cor": cor, 
+                "Nota": nomes_notas[i-1], 
+                "Frequência": f"{i}x"
+            })
             
         df_chart = pd.DataFrame(dados_harmonicos)
         chart = alt.Chart(df_chart).mark_bar().encode(
-            x=alt.X('Harmônico', sort=None), y=alt.Y('Energia', axis=None), color=alt.Color('Cor', scale=None), tooltip=['Harmônico', 'Nota']
-        ).properties(height=350)
+            x=alt.X('Harmônico', sort=None), 
+            y=alt.Y('Energia', axis=None), 
+            color=alt.Color('Cor', scale=None), 
+            tooltip=['Harmônico', 'Nota', 'Frequência']
+        ).properties(height=300)
+        
         text = chart.mark_text(dy=-10, color='white').encode(text='Nota')
         st.altair_chart(chart + text, use_container_width=True)
-        
-        # --- NOVA EXPLICAÇÃO: O ACORDE FÍSICO ---
+
         st.markdown("""
         <div class="nature-chord-box" style="margin-top: 10px; padding: 15px;">
             <h5 style="margin: 0; color: #fff;">🌿 A Natureza é "Maior"</h5>
@@ -170,78 +156,197 @@ if menu == "📚 Aula Teórica":
             </p>
         </div>
         """, unsafe_allow_html=True)
-        
+
 # =========================================
-# CONTEÚDO 2: ANIMAÇÃO
+# CONTEÚDO 2: ANIMAÇÃO (COM PAUSE E VELOCIDADE)
 # =========================================
 elif menu == "🎻 Corda Viva (Visualizador)":
     col_vis, col_mixer = st.columns([2, 1])
 
     with col_mixer:
         st.subheader("🎛️ Timbre")
+        
+        # Botões de Preset
         c1, c2 = st.columns(2)
         if c1.button("Flauta 🪈"): apply_preset("Flauta")
         if c2.button("Clarinete 🌭"): apply_preset("Clarinete")
         c3, c4 = st.columns(2)
         if c3.button("Violino 🎻"): apply_preset("Violino")
         if c4.button("Sino 🔔"): apply_preset("Sino")
+        
         st.markdown("---")
+        st.caption("Ajuste a energia de cada harmônico:")
+        
+        # Sliders de Harmônicos
         for i in range(6):
-            val = st.slider(f"H{i+1}", 0.0, 1.0, key=f"sl_{i}", on_change=lambda i=i: st.session_state.amplitudes.__setitem__(i, st.session_state[f"sl_{i}"]))
+            val = st.slider(f"H{i+1}", 0.0, 1.0, value=st.session_state.amplitudes[i], key=f"sl_{i}", 
+                          on_change=lambda i=i: st.session_state.amplitudes.__setitem__(i, st.session_state[f"sl_{i}"]))
             st.session_state.amplitudes[i] = val
+            
         st.markdown("---")
-        btn_txt = "⏸️ Pausar" if st.session_state.animating else "▶️ Animar"
-        st.button(btn_txt, on_click=toggle_animation, type="primary" if not st.session_state.animating else "secondary")
-        show_sum = st.checkbox("Mostrar Soma", value=True)
+        st.subheader("⚙️ Controles")
+
+        # --- CONTROLE DE VELOCIDADE (NOVO) ---
+        # Default 0.05 (velocidade normal)
+        speed = st.slider("Velocidade da Animação", 0.01, 0.20, 0.05, 0.01)
+        
+        # --- BOTÃO PAUSAR ---
+        if 'animating' not in st.session_state:
+            st.session_state.animating = True
+
+        def toggle_anim():
+            st.session_state.animating = not st.session_state.animating
+
+        btn_label = "⏸️ Pausar" if st.session_state.animating else "▶️ Tocar"
+        st.button(btn_label, on_click=toggle_anim, type="primary" if st.session_state.animating else "secondary")
+        
+        show_sum = st.checkbox("Mostrar Soma (Linha Branca)", value=True)
 
     with col_vis:
-        st.subheader("Interferência")
-        plot_spot = st.empty()
-        colors = ['#ff00ff', '#ffff00', '#00ff00', '#00ffff', '#ff9900', '#ff3333']
-        x = np.linspace(0, 1, 500)
+        st.subheader("Interferência em Tempo Real")
         
-        if st.session_state.animating:
-            start_time = time.time()
-            fig, ax = plt.subplots(figsize=(10, 6))
-            fig.patch.set_facecolor('#0e1117')
-            while st.session_state.animating:
-                t = (time.time() - start_time) * 1.5
-                ax.clear(); ax.set_facecolor('#0e1117'); ax.set_ylim(-2.0, 2.0); ax.set_xlim(0, 1); ax.axis('off')
-                ax.axvline(0, color='#666', lw=4); ax.axvline(1, color='#666', lw=4); ax.axhline(0, color='#333', lw=1)
-                y_total = np.zeros_like(x)
-                for i in range(6):
-                    amp = st.session_state.amplitudes[i]
-                    h_num = i + 1
-                    if amp > 0.01:
-                        y_inst = amp * np.sin(h_num * np.pi * x) * np.cos(t * h_num)
-                        y_total += y_inst
-                        ax.plot(x, y_inst, color=colors[i], lw=1.5, alpha=0.6)
-                        ax.plot(x, amp * np.sin(h_num * np.pi * x), color=colors[i], lw=0.5, ls=':', alpha=0.3)
-                if show_sum: ax.plot(x, y_total, color='white', lw=3.5)
-                plot_spot.pyplot(fig)
-                time.sleep(0.01)
-            plt.close(fig)
-        else:
-            fig, ax = plt.subplots(figsize=(10, 6))
-            fig.patch.set_facecolor('#0e1117'); ax.set_facecolor('#0e1117')
-            ax.set_ylim(-2.0, 2.0); ax.set_xlim(0, 1); ax.axis('off')
-            ax.axvline(0, color='#666', lw=4); ax.axvline(1, color='#666', lw=4)
-            ax.text(0.5, 0, "Pausado", color='#666', ha='center')
-            for i in range(6):
-                amp = st.session_state.amplitudes[i]
-                if amp > 0.01:
-                    y = amp * np.sin((i+1) * np.pi * x)
-                    ax.plot(x, y, color=colors[i], alpha=0.5); ax.plot(x, -y, color=colors[i], alpha=0.5)
-            plot_spot.pyplot(fig)
+        # --- PREPARAÇÃO DOS DADOS PRO JAVASCRIPT ---
+        # Enviamos agora o "speed" junto com o resto
+        js_data = json.dumps({
+            "amps": st.session_state.amplitudes[:6],
+            "showSum": show_sum,
+            "isPaused": not st.session_state.animating,
+            "speed": speed # <--- O valor do slider vai aqui
+        })
+
+        # --- HTML/JS ---
+        html_code = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <style>
+                body {{ margin: 0; background-color: #0e1117; overflow: hidden; }}
+                canvas {{ width: 100%; height: 400px; border-radius: 8px; border: 1px solid #333; }}
+            </style>
+        </head>
+        <body>
+            <canvas id="waveCanvas"></canvas>
+            <script>
+                const canvas = document.getElementById('waveCanvas');
+                const ctx = canvas.getContext('2d');
+                
+                const data = {js_data};
+                
+                const colors = ['#ff00ff', '#ffff00', '#00ff00', '#00ffff', '#ff9900', '#ff3333'];
+                
+                if (typeof window.time === 'undefined') window.time = 0;
+                
+                function resize() {{
+                    canvas.width = window.innerWidth;
+                    canvas.height = 400;
+                }}
+                window.addEventListener('resize', resize);
+                resize();
+
+                function draw() {{
+                    const w = canvas.width;
+                    const h = canvas.height;
+                    const centerY = h / 2;
+                    const scaleY = h / 5;
+                    
+                    ctx.clearRect(0, 0, w, h);
+                    
+                    // Eixo
+                    ctx.beginPath(); ctx.strokeStyle = '#333'; ctx.lineWidth = 1;
+                    ctx.moveTo(0, centerY); ctx.lineTo(w, centerY); ctx.stroke();
+
+                    const numPoints = 300;
+                    const sumY = new Float32Array(numPoints);
+                    
+                    for (let hIdx = 0; hIdx < 6; hIdx++) {{
+                        const amp = data.amps[hIdx];
+                        if (amp < 0.01) continue;
+                        
+                        const hNum = hIdx + 1;
+                        const color = colors[hIdx];
+                        
+                        ctx.beginPath();
+                        ctx.strokeStyle = color;
+                        ctx.lineWidth = 1.5;
+                        ctx.globalAlpha = 0.6;
+                        
+                        for (let i = 0; i < numPoints; i++) {{
+                            const xNorm = i / (numPoints - 1);
+                            const xPix = xNorm * w;
+                            
+                            // Usa window.time para animar
+                            const yVal = amp * Math.sin(hNum * Math.PI * xNorm) * Math.cos(window.time * hNum);
+                            
+                            sumY[i] += yVal;
+                            const yPix = centerY - (yVal * scaleY);
+                            if (i === 0) ctx.moveTo(xPix, yPix); else ctx.lineTo(xPix, yPix);
+                        }}
+                        ctx.stroke();
+                        
+                        // Fantasma
+                        ctx.beginPath();
+                        ctx.setLineDash([2, 4]); ctx.lineWidth = 0.5; ctx.globalAlpha = 0.3;
+                        for (let i = 0; i < numPoints; i++) {{
+                            const xNorm = i / (numPoints - 1);
+                            const xPix = xNorm * w;
+                            const yVal = amp * Math.sin(hNum * Math.PI * xNorm);
+                            const yPix = centerY - (yVal * scaleY);
+                            if (i === 0) ctx.moveTo(xPix, yPix); else ctx.lineTo(xPix, yPix);
+                        }}
+                        ctx.stroke();
+                        ctx.setLineDash([]);
+                    }}
+
+                    if (data.showSum) {{
+                        ctx.beginPath(); ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 3; ctx.globalAlpha = 1.0;
+                        for (let i = 0; i < numPoints; i++) {{
+                            const xNorm = i / (numPoints - 1);
+                            const xPix = xNorm * w;
+                            const yPix = centerY - (sumY[i] * scaleY);
+                            if (i === 0) ctx.moveTo(xPix, yPix); else ctx.lineTo(xPix, yPix);
+                        }}
+                        ctx.stroke();
+                    }}
+                    
+                    // --- LÓGICA DE VELOCIDADE ---
+                    if (!data.isPaused) {{
+                        // Agora soma o valor vindo do Slider (data.speed)
+                        window.time += data.speed;
+                    }}
+                    
+                    requestAnimationFrame(draw);
+                }}
+                
+                draw();
+            </script>
+        </body>
+        </html>
+        """
+        components.html(html_code, height=410)
+        
+        # --- LEGENDA DE CORES ---
+        st.markdown("""
+        <div style="display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; background-color: #161b22; padding: 10px; border-radius: 8px; font-size: 0.8em; border: 1px solid #333; margin-top: -5px; margin-bottom: 15px;">
+            <div style="display: flex; align-items: center;"><span style="background: #ff00ff; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; display:inline-block;"></span><b>H1</b> (Tônica)</div>
+            <div style="display: flex; align-items: center;"><span style="background: #ffff00; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; display:inline-block;"></span><b>H2</b> (Oitava)</div>
+            <div style="display: flex; align-items: center;"><span style="background: #00ff00; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; display:inline-block;"></span><b>H3</b> (Quinta)</div>
+            <div style="display: flex; align-items: center;"><span style="background: #00ffff; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; display:inline-block;"></span><b>H4</b> (2ª Oitava)</div>
+            <div style="display: flex; align-items: center;"><span style="background: #ff9900; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; display:inline-block;"></span><b>H5</b> (Terça Maior)</div>
+            <div style="display: flex; align-items: center;"><span style="background: #ff3333; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; display:inline-block;"></span><b>H6</b> (Quinta Alta)</div>
+            <div style="display: flex; align-items: center; margin-left: 10px; padding-left: 10px; border-left: 1px solid #555;"><span style="background: #ffffff; width: 15px; height: 4px; margin-right: 5px; display:inline-block;"></span><b>SOMA</b> (Resultado)</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        if not st.session_state.animating:
+            st.warning("⏸️ Pausado")
 
 # =========================================
-# CONTEÚDO 3: VIOLÃO (COM A EXPLICAÇÃO RESGATADA)
+# CONTEÚDO 3: VIOLÃO
 # =========================================
 elif menu == "🎸 No Violão":
     st.header("🎸 Harmônicos Naturais")
     st.markdown("Use o slider para encontrar os nós e veja como eles formam o Acorde Maior.")
     
-    # 1. Opções (incluindo 4ª casa)
     casas_opcoes = [
         "12ª (H2 - Oitava)", 
         "7ª (H3 - Quinta)", 
@@ -253,7 +358,6 @@ elif menu == "🎸 No Violão":
     
     escolha = st.select_slider("Posição do Dedo:", options=casas_opcoes, value="12ª (H2 - Oitava)")
     
-    # Mapeamentos
     harm_map = {"12ª":2, "7ª":3, "5ª":4, "9ª":5, "4ª":5, "3ª":6}
     node_pos_map = {"12ª":0.5, "7ª":0.333, "5ª":0.25, "9ª":0.4, "4ª":0.2, "3ª":0.166}
     
@@ -261,7 +365,6 @@ elif menu == "🎸 No Violão":
     h_val = harm_map[selected_key]
     finger_pos = node_pos_map[selected_key]
 
-    # Gráfico do Braço
     fig, ax = plt.subplots(figsize=(12, 3), dpi=100)
     fig.patch.set_facecolor('#222'); ax.set_facecolor('#222')
     
@@ -272,21 +375,18 @@ elif menu == "🎸 No Violão":
     ax.plot(x_v, y_v, color='#00ff00', lw=2.5, label='Vibração')
     ax.plot(x_v, -y_v, color='#00ff00', lw=2.5, alpha=0.3, ls='--')
     
-    # Trastes (Todos)
     for i in range(1, 13):
         fret_pos = 1 - (1 / (2 ** (i / 12)))
         ax.axvline(fret_pos, color='#444', lw=1.5, zorder=1)
         ax.text(fret_pos, -1.3, str(i), color='#888', ha='center', fontsize=9, fontweight='bold')
     ax.axvline(0, color='#888', lw=3)
     
-    # Dedo
     ax.scatter([finger_pos], [0], s=250, color='white', edgecolor='red', lw=2, zorder=10)
     ax.text(finger_pos, 0.7, "👇 Dedo aqui", color='white', ha='center', fontweight='bold', fontsize=10)
     
     ax.axis('off'); ax.set_ylim(-1.4, 1.4); ax.set_xlim(-0.02, 1.02)
     st.pyplot(fig)
     
-    # --- A VOLTA DA EXPLICAÇÃO DO ACORDE ---
     st.markdown("---")
     
     col_info, col_acorde = st.columns([1, 1])
@@ -295,7 +395,6 @@ elif menu == "🎸 No Violão":
         st.info(f"📍 **Detalhe Técnico:**\nAo tocar na **{selected_key} casa**, você força a corda a se dividir em **{h_val} partes** iguais.")
         
     with col_acorde:
-        # Lógica para mostrar mensagem personalizada
         msg_header = "🌿 O Segredo Verde"
         if h_val == 4:
             msg_body = "Você encontrou a **TÔNICA** (H4). A base do acorde."
