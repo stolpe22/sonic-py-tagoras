@@ -30,8 +30,8 @@ Decidi unir minhas duas metades. Usei Python para calcular as frequências exata
 O projeto é dividido em 3 pilares educacionais:
 
 ### 1. 🧬 A Física (O Som)
-* **Série Harmônica:** Visualize a corda vibrando e entenda o "DNA" dos timbres.
-* **Geometria do Som:** Veja figuras de Lissajous reagindo a frequências em tempo real.
+* **Série Harmônica (Otimizada):** Visualizador de corda vibrante rodando a **60 FPS** (via HTML5 Canvas) com controles de **velocidade** e **pausa** para análise detalhada.
+* **Geometria do Som:** Figuras de Lissajous reagindo a frequências em tempo real.
 
 ### 2. 📐 A Matemática (O Problema)
 * **O Coma Pitagórico:** Demonstração do "bug" matemático que impede que a música seja cíclica.
@@ -39,7 +39,7 @@ O projeto é dividido em 3 pilares educacionais:
 * **Intervalo do Lobo:** Ouça a dissonância proibida que assombrou músicos por séculos.
 
 ### 3. 🎻 A Aplicação (A Música)
-* **Piano Comparativo:** Toque e compare a Afinação Justa (Pura) vs. Temperada (Moderna).
+* **Piano Comparativo:** Toque e compare a Afinação Justa (Pura) vs. Temperada (Moderna) usando seu **teclado ou mouse**.
 * **Laboratório de Acordes:** A física das emoções (Acordes Maiores vs. Menores).
 * **Treino Auditivo:** Um game para testar se seu ouvido percebe microtons.
 
@@ -49,7 +49,8 @@ O projeto é dividido em 3 pilares educacionais:
 
 * **[Streamlit](https://streamlit.io/):** Interface interativa e dashboards.
 * **[NumPy](https://numpy.org/):** Síntese de áudio (DSP) e cálculos vetoriais.
-* **[Matplotlib](https://matplotlib.org/) & [Altair](https://altair-viz.github.io/):** Visualização de dados.
+* **[Matplotlib](https://matplotlib.org/) & [Altair](https://altair-viz.github.io/):** Visualização de dados estáticos.
+* **HTML5 Canvas / JS:** Injeção de scripts para renderização de animações de alta performance no navegador (Client-side).
 * **[UV](https://github.com/astral-sh/uv):** Gerenciamento de dependências ultra-rápido.
 
 ---
@@ -106,4 +107,4 @@ Curtiu a ideia de misturar código e som? Sinta-se à vontade para abrir Issues 
 
 ---
 
-Feito com 🐍, 🎵 e curiosidade por **Lucas Stolpe]*.
+Feito com 🐍, 🎵 e curiosidade por Lucas Stolpe.
