@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    container_name: sonic_lab
+    ports:
+      - "8501:8501"
+    volumes:
+      # Isso permite que você edite o código no VS Code e atualize 
+      # no container em tempo real sem precisar rebuildar!
+      - ./:/app
+    restart: always
