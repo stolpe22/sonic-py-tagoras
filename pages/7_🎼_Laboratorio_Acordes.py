@@ -70,14 +70,14 @@ with col_ctrl:
 def get_freq(note_name, oct):
     # Dicionário de distancias a partir de C
     semitones_from_c = {n: i for i, n in enumerate(notas)}
-    n = semitones_from_c[note_name]
-    # Fórmula: f = 440 * 2^((n-9)/12) relativo a A4, mas vamos simplificar usando C4 como base ~261.63
-    # C4 é nota 0 na nossa lógica local de calculo relativo
-    # Mas para ser preciso:
-    # A4 = 440. C4 é 9 semitons abaixo de A4? Não, A4 é nota 9 (se C=0) + oitava.
-    # Vamos usar midi numbers. C4 = 60.
-    midi_root = semitones_from_c[root_note] + ((oct + 1) * 12)
-    return 440.0 * (2 ** ((midi_root - 69) / 12))
+    
+    # --- CORREÇÃO AQUI ---
+    # Antes estava usando semitones_from_c[root_note], o que travava tudo na raiz.
+    # Agora usa semitones_from_c[note_name], que é a nota atual do loop.
+    midi_note = semitones_from_c[note_name] + ((oct + 1) * 12)
+    
+    # Cálculo da frequência baseado no padrão MIDI (A4 = 69 = 440Hz)
+    return 440.0 * (2 ** ((midi_note - 69) / 12))
 
 # Calcular frequencias do acorde
 chord_freqs = []
@@ -158,22 +158,44 @@ with tab_wave:
         st.markdown("### 🔊 Ouça")
         
         # Gerar áudio mais longo para tocar
-        dur_audio = 2.5
+        dur_audio = 2.0
         t_audio = np.linspace(0, dur_audio, int(sr*dur_audio), endpoint=False)
+        
+        # Inicializa o array vazio
         final_wave = np.zeros_like(t_audio)
         
-        # Síntese Aditiva Suave (Piano Elétrico style)
+        # SINTESE: Soma todas as notas do acorde
+        num_notas = len(chord_freqs)
+        
         for f in chord_freqs:
-            # Fundamental + harmônico suave para dar corpo
-            final_wave += 0.5 * np.sin(2 * np.pi * f * t_audio)
-            final_wave += 0.1 * np.sin(2 * np.pi * f * 2 * t_audio) 
+            # Para cada nota do acorde, adicionamos a fundamental + um harmônico leve (timbre de orgão/piano)
+            tone = 0.6 * np.sin(2 * np.pi * f * t_audio)          # Fundamental
+            tone += 0.2 * np.sin(2 * np.pi * (f * 2) * t_audio)   # 2º Harmônico (Oitava)
+            tone += 0.1 * np.sin(2 * np.pi * (f * 3) * t_audio)   # 3º Harmônico (Quinta)
             
-        # Envelope (Fade in/out)
-        env = np.concatenate([np.linspace(0, 1, 1000), np.ones(len(final_wave)-5000), np.linspace(1, 0, 4000)])
+            # Soma ao mix final
+            final_wave += tone
+        
+        # Envelope ADSR Simples para não dar "pop" no começo nem no fim
+        # Attack (100ms), Sustain (durante), Release (300ms)
+        attack = int(sr * 0.1)
+        release = int(sr * 0.3)
+        
+        env = np.ones_like(final_wave)
+        env[:attack] = np.linspace(0, 1, attack)
+        env[-release:] = np.linspace(1, 0, release)
+        
         final_wave = final_wave * env
         
-        # Normalizar
-        final_wave = final_wave / np.max(np.abs(final_wave))
+        # NORMALIZAÇÃO IMPORTANTE:
+        # Divide pelo valor máximo absoluto para garantir que fique entre -1.0 e 1.0
+        # Adiciona um pequeno epsilon para evitar divisão por zero se for silêncio
+        max_val = np.max(np.abs(final_wave))
+        if max_val > 0:
+            final_wave = final_wave / max_val
+            
+        # Reduz um pouco o ganho final para evitar distorção nos alto-falantes
+        final_wave = final_wave * 0.8
         
         st.audio(final_wave, sample_rate=sr)
         
